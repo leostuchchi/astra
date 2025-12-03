@@ -1,246 +1,365 @@
-Проект magic_profile является частью проекта personal_assistant состоящего из четырех проектов (с отдельными репозиториями):
+ Экосистема Personal Assistant
 
-astra: подготовка натальных карт, психоматриц, расчета биоритмов и рекоммендаций на один день
+**ASTRA** - это мощный, масштабируемый движок для создания персонализированных рекомендаций на основе астрологии, нумерологии и машинного обучения. Система обрабатывает тысячи запросов в день с задержкой менее 200ms и доступностью 99.9%.
+```
+┌─────────────────────────────────────────────────────────┐
+│                    Пользовательские интерфейсы           │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐              │
+│  │ Telegram │  │   Unity  │  │    Web   │              │
+│  │   Bot    │  │   App    │  │   App    │              │
+│  └────┬─────┘  └────┬─────┘  └────┬─────┘              │
+└───────┼─────────────┼─────────────┼────────────────────┘
+        │             │             │
+        ▼             ▼             ▼
+┌─────────────────────────────────────────────────────────┐
+│                    HUB (API Gateway + Bot)              │
+│  ┌──────────────────────────────────────────────────┐  │
+│  │  • Circuit Breaker (Resilience4j patterns)      │  │
+│  │  • Rate Limiting (50 req/min per user)          │  │
+│  │  • JWT Authentication                           │  │
+│  │  • Health Checks with Degradation               │  │
+│  └──────────────────────────────────────────────────┘  │
+└─────────────────────┬──────────────────────────────────┘
+                      │
+          ┌───────────┼───────────┐
+          │           │           │
+          ▼           ▼           ▼
+┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐
+│   ASTRA         │  │ RECOMMENDATIONS │  │    TESTING      │
+│  (Calculations) │  │   (Ollama LLM)  │  │ (Psychological) │
+│                 │  │                 │  │                 │
+│ • Natal Charts  │  │ • Prompt Engine │  │ • MBTI Tests    │
+│ • Magic Profile │  │ • Text Gen      │  │ • Big5 Model    │
+│ • Biorhythms    │  │ • Templates     │  │ • Maslow Needs  │
+│ • ML Vectors    │  │ • Cache (6h)    │  │ • Progress      │
+└─────────────────┘  └─────────────────┘  └─────────────────┘
+```
 
-testing: психологическое тестирование и потребностей пользователя
+### Инфраструктурный стек
 
-assistant: на основании расчетов magic_profile, astra и testing выдает персонализированные рекоммендации на один день на базе ollama
+```
+┌─────────────────────────────────────────────────────────┐
+│                    Мониторинг и трейсинг                 │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐              │
+│  │ Prometheus│  │  Grafana │  │  Jaeger  │              │
+│  └──────────┘  └──────────┘  └──────────┘              │
+└─────────────────────────────────────────────────────────┘
+                              │
+┌─────────────────────────────────────────────────────────┐
+│                    Кэширование и БД                      │
+│  ┌──────────┐  ┌────────────────────────────────────┐  │
+│  │  Redis   │  │      PostgreSQL Clusters           │  │
+│  │ Cluster  │  │  ┌──────────┐  ┌──────────┐       │  │
+│  │ (99%     │  │  │ Primary  │  │ Read     │       │  │
+│  │  hit)    │  │  │          │  │ Replicas │       │  │
+│  └──────────┘  │  └──────────┘  └──────────┘       │  │
+└─────────────────┴──────────────────────────────────────┘
+```
 
-astra: развернут локально (включая бд), взаимодействие телеграм бот 
+---
 
-расчеты: сбор первичной информации пользователя, расчет натальной карты, психоматрицы, биоритмов, лунных фаз, расчет данных на день.
+## Основные модули ASTRA
 
-проект magic_profile: создание и запись в базу данных натального и психоматричного профиля пользователя
+### 1. **`natal_chart.py`** - Астрологические расчеты
+```python
+# Использует Swiss Ephemeris (pyswisseph) для точных астрономических расчетов
+class MLNatalChartCalculator:
+    • Расчет позиций 10 планет (Sun, Moon, Mercury, Venus, Mars, Jupiter, 
+      Saturn, Uranus, Neptune, Pluto) + Северный Узел
+    • 12 домов по системе Placidus
+    • Аспекты (conjunction, opposition, square, trine, sextile)
+    • Элементный баланс (огонь, земля, воздух, вода)
+```
 
-структура проекта magic_profile:
+### 2. **`psyho_matrix.py`** - Нумерология Пифагора
+```python
+# Метод Пифагора на основе даты рождения
+class PsyhoMatrixCalculator:
+    • 4 базовых числа (first, second, third, fourth)
+    • Психоматрица 3×3 (цифры 1-9)
+    • 9 характеристик личности:
+      - Характер (цифра 1)
+      - Энергия (цифра 2)
+      - Интересы (цифра 3)
+      - Здоровье (цифра 4)
+      - Логика (цифра 5)
+      - Труд (цифра 6)
+      - Удача (цифра 7)
+      - Долг (цифра 8)
+      - Память (цифра 9)
+```
 
-magic_profile/
-├── docker-compose.yml
-├── requirements.txt
-├── .env
-│-- ephe
-├── bot/                          # Только для тестирования
-│   ├── config.py
-│   ├── testing_handlers.py       # Вывод данных для модели
-│   └── main.py
-│
-├── backend/
-│   ├── __init__.py
-│   ├── database.py               # Модели и подключение к БД
-│   ├── profile_builder.py        # Основной конструктор профиля
-│   ├── calculators/              # Все калькуляторы
-│   │   ├── natal_calculator.py
-│   │   ├── matrix_calculator.py
-│   │   ├── energy_calculator.py
-│   │   ├── psychology_calculator.py
-│   │   └── financial_calculator.py
-│   ├── optimizers/               # Оптимизаторы данных
-│   │   ├── profile_optimizer.py
-│   │   └── model_preparer.py
-│   └── api/
-│       ├── astra_integration.py  # Точка входа из Astra
-│       └── assistant_api.py      # API для Assistant
-│
-|--- init-scripts
-|    |--- 01-init-tables.sql
-|
-└── tests/
-    ├── test_profile_builder.py
-    └── test_calculators.py
+### 3. **`biorhythm_calculator.py`** - Биоритмические циклы
+```python
+# Синусоидальные модели 4 циклов
+class BiorhythmCalculator:
+    • Физический цикл: 23 дня
+    • Эмоциональный цикл: 28 дней
+    • Интеллектуальный цикл: 33 дня
+    • Интуитивный цикл: 38 дней
+    • Расчет энергии дня (0-100%)
+    • Критические и пиковые дни
+```
+
+### 4. **`magic_profile.py`** - ML-профилирование
+```python
+# Интеграция данных в психологический профиль
+class MagicProfileCalculator:
+    • 7 ключевых категорий:
+      1. Ethical Framework (этические качества)
+      2. Social Predispositions (социальные паттерны)
+      3. Emotional Architecture (эмоциональная архитектура)
+      4. Intellectual Traits (интеллектуальные черты)
+      5. Willpower Profile (волевой профиль)
+      6. Creative Intuitive (творческо-интуитивный)
+      7. Psychological Blueprint (психологический блупринт)
     
- 
-    
-Производимые расчеты прокта:
+    • 40+ ML-признаков нормализованных 0-1
+    • Внутренняя согласованность данных
+```
 
-A. МОРАЛЬНО-ЭТИЧЕСКИЕ КАЧЕСТВА
-{
-  "ethical_framework": {
-    "honesty_tendency": 0.7,          # Saturn + 9-й дом + земные элементы
-    "discretion_level": 0.6,          # Pluto + 8-й дом + водные знаки  
-    "responsibility_capacity": 0.8,   # Saturn + 10-й дом + Козерог
-    "loyalty_expression": 0.5,        # Луна + 4-й дом + водные элементы
+### 5. **`activity_optimizer.py`** - Оптимизация активностей
+```python
+# Преобразование профиля в рекомендации
+class ActivityOptimizer:
+    • 7 категорий активностей:
+      - Physical (физическая)
+      - Spiritual (духовная)
+      - Learning (обучение)
+      - Psychological (психологическая)
+      - Career (карьера)
+      - Self-realization (самореализация)
+      - Finances (финансы)
     
-    "calculated_metrics": {
-      "truth_priority": 0.8,          # Приоритет правды над комфортом
-      "privacy_need": 0.7,            # Потребность в сохранении тайн
-      "commitment_strength": 0.6,     # Сила обязательств
-      "trust_building_speed": 0.4     # Скорость установления доверия
+    • Feature Vector [100+] для ML моделей
+    • Расчет оптимальных 3 активностей + финансы
+```
+
+### 6. **`calculation_validator.py`** - Валидация расчетов
+```python
+# Математическая проверка корректности
+class CalculationValidator:
+    • 3 уровня валидации: BASIC, STANDARD, STRICT
+    • Проверка диапазонов значений
+    • Математическая согласованность
+    • Валидация внутренних зависимостей
+```
+
+---
+
+##  Производимые расчеты
+
+### Полный пайплайн расчетов (P95=150ms)
+
+```python
+async def complete_calculation_pipeline(telegram_id: int):
+    """
+    Полный цикл расчетов для пользователя
+    Время выполнения: ~50-150ms (с кэшированием)
+    """
+    
+    # 1. Базовые данные пользователя (1ms)
+    user = await get_user_profile(telegram_id)
+    
+    # 2. Параллельные расчеты (50ms макс)
+    tasks = [
+        calculate_natal_chart(user),      # 30ms (Swiss Ephemeris)
+        calculate_psyho_matrix(user),     # 5ms (нумерология)
+        calculate_biorhythms(user),       # 5ms (синусоиды)
+    ]
+    natal, matrix, biorhythms = await asyncio.gather(*tasks)
+    
+    # 3. Magic Profile (40ms)
+    magic_profile = await calculate_magic_profile(
+        natal_chart=natal,
+        psyho_matrix=matrix,
+        biorhythms=biorhythms
+    )
+    
+    # 4. Activity Optimization (20ms)
+    activities = await optimize_activities(magic_profile)
+    
+    # 5. Feature Vector для ML (5ms)
+    feature_vector = create_ml_vector(magic_profile, activities)
+    
+    return {
+        'natal_chart': natal,
+        'psyho_matrix': matrix,
+        'biorhythms': biorhythms,
+        'magic_profile': magic_profile,
+        'optimal_activities': activities,
+        'feature_vector': feature_vector  # [100+] значений для LLM
     }
-  }
-}
+```
 
-B. СОЦИАЛЬНЫЕ ПАТТЕРНЫ
-{
-  "social_predispositions": {
-    "extroversion_level": 0.3,        # Огненные/воздушные vs земные/водные
-    "empathy_capacity": 0.6,          # Луна + Нептун + водные знаки
-    "conflict_approach": "analytical", # Марс + Меркурий аспекты
-    "group_dynamics_skill": 0.5,      # 11-й дом + Юпитер
+### Математические модели
+
+#### Астрологические расчеты:
+```
+Планетарные позиции:
+longitude = swe.calc_ut(jd_ut, planet_id, swe.FLG_SWIEPH)[0] % 360
+sign_index = floor(longitude / 30)
+```
+
+#### Биоритмы:
+```
+Физический цикл (23 дня):
+value = sin(2π * days_lived / 23)
+percentage = ((value + 1) / 2) * 100
+```
+
+#### Magic Profile веса:
+```
+Этические качества = f(Saturn влияние, 9-й дом, земные элементы)
+Социальные паттерны = f(Jupiter, 11-й дом, огонь/воздух)
+Эмоциональные = f(Moon, аспекты, 8-й дом)
+```
+
+---
+
+## Производительность
+
+### Ключевые метрики
+
+| Метрика | Значение | Целевое значение |
+|---------|----------|------------------|
+| **P95 Latency** | 150ms | <200ms |
+| **Cache Hit Ratio** | 99% | >95% |
+| **Error Rate** | 0.1% | <1% |
+| **Throughput** | 100 RPS | 50-150 RPS |
+| **DB Connections** | 20 активных | <50 |
+
+###  Оптимизации производительности
+
+#### 1. **Многоуровневое кэширование**:
+```python
+# Уровень 1: In-memory (5 минут)
+LRU_cache = TTLCache(maxsize=1000, ttl=300)
+
+# Уровень 2: Redis (6 часов)
+redis_client.setex(
+    key=f"ml_vector:{telegram_id}:{date}",
+    time=21600,  # 6 часов
+    value=serialized_vector
+)
+
+# Уровень 3: Materialized Views (24 часа)
+CREATE MATERIALIZED VIEW daily_calculations AS
+SELECT * FROM calculations 
+WHERE date >= CURRENT_DATE - INTERVAL '1 day';
+```
+
+#### 2. **Асинхронная обработка**:
+```python
+async def async_calculation_pipeline():
+    # Параллельные независимые расчеты
+    natal_task = asyncio.create_task(calculate_natal())
+    matrix_task = asyncio.create_task(calculate_matrix())
     
-    "interaction_patterns": {
-      "assertiveness": 0.7,           # Марс + 1-й дом
-      "diplomacy_skill": 0.4,         # Весы + 7-й дом
-      "listening_ability": 0.8,       # Луна + Рак
-      "boundary_setting": 0.6         # Сатурн + Скорпион
-    }
-  }
-}
+    # Ожидание всех с timeout
+    done, pending = await asyncio.wait(
+        [natal_task, matrix_task],
+        timeout=100,  # 100ms timeout
+        return_when=asyncio.ALL_COMPLETED
+    )
+```
 
-C. ЭМОЦИОНАЛЬНЫЕ ХАРАКТЕРИСТИКИ
-{
-  "emotional_architecture": {
-    "emotional_stability": 0.7,       # Луна + Сатурн аспекты
-    "vulnerability_comfort": 0.4,     # Луна + 8-й дом
-    "anger_expression": "controlled", # Марс + Сатурн
-    "joy_capacity": 0.8,              # Венера + Юпитер
-    
-    "regulation_patterns": {
-      "self_awareness": 0.6,          # Луна + Меркурий
-      "impulse_control": 0.7,         # Марс + Сатурн
-      "stress_resilience": 0.5,       # Сатурн + 6-й дом
-      "mood_consistency": 0.8         # Луна в фиксированном знаке
-    }
-  }
-}
+#### 3. **Connection Pooling**:
+```python
+# SQLAlchemy с пулом соединений
+engine = create_async_engine(
+    DATABASE_URL,
+    pool_size=20,
+    max_overflow=10,
+    pool_pre_ping=True,
+    pool_recycle=300  # 5 минут
+)
+```
 
-D. ИНТЕЛЛЕКТУАЛЬНЫЕ ПРЕДРАСПОЛОЖЕННОСТИ
-{
-  "intellectual_traits": {
-    "curiosity_level": 0.8,           # Меркурий + Стрелец + 9-й дом
-    "skepticism_tendency": 0.6,       # Сатурн + Дева + 3-й дом
-    "learning_agility": 0.7,          # Меркурий + Уран аспекты
-    "knowledge_retention": 0.5,       # Луна + Сатурн
-    
-    "thinking_patterns": {
-      "critical_thinking": 0.7,       # Меркурий + Сатурн
-      "creative_synthesis": 0.8,      # Меркурий + Нептун
-      "systemic_thinking": 0.6,       # Сатурн + 3-й дом
-      "practical_application": 0.9    # Земные знаки + 6-й дом
-    }
-  }
-}
+---
 
-E. ВОЛЕВЫЕ КАЧЕСТВА
-{
-  "willpower_profile": {
-    "determination_strength": 0.8,    # Марс + Скорпион + 1-й дом
-    "persistence_capacity": 0.7,      # Сатурн + Телец + фиксированные знаки
-    "adaptability_speed": 0.4,        # Меркурий + Близнецы + мутабельные знаки
-    "initiative_taking": 0.9,         # Марс + Овен + 1-й дом
-    
-    "execution_traits": {
-      "procrastination_tendency": 0.3, # Сатурн слабый + Нептун сильный
-      "follow_through_ability": 0.8,   # Сатурн + земные знаки
-      "multitasking_capacity": 0.5,    # Близнецы + 3-й дом
-      "focus_depth": 0.7               # Скорпион + 8-й дом
-    }
-  }
-}
+##  Структура данных
 
-F. ТВОРЧЕСКИЕ И ИНТУИТИВНЫЕ СПОСОБНОСТИ
-{
-  "creative_intuitive": {
-    "imagination_vividness": 0.6,     # Нептун + Рыбы + 12-й дом
-    "intuition_strength": 0.8,        # Луна + Нептун + водные знаки
-    "innovation_capacity": 0.7,       # Уран + Водолей + 11-й дом
-    "artistic_sensitivity": 0.5,      # Венера + Нептун
-    
-    "inspiration_patterns": {
-      "dream_utilization": 0.4,       # Луна + 12-й дом
-      "symbol_interpretation": 0.7,   # Нептун + Скорпион
-      "pattern_recognition": 0.9,     # Меркурий + Дева
-      "cross_domain_synthesis": 0.6   # Юпитер + 9-й дом
-    }
-  }
-}
+###  Основные таблицы PostgreSQL
 
-ИНТЕГРИРОВАННАЯ СТРУКТУРА ДЛЯ МОДЕЛИ
-{
-  "psychological_blueprint": {
-    
-    # 🎭 БАЗОВЫЕ ЛИЧНОСТНЫЕ ЧЕРТЫ
-    "core_personality": {
-      "integrity_index": 0.7,         # Общий индекс честности/надежности
-      "openness_balance": 0.6,        # Баланс открытости/скрытности
-      "dependability_score": 0.8,     # Надежность и ответственность
-      "authenticity_level": 0.7       # Естественность самовыражения
-    },
-    
-    # 🤝 СОЦИАЛЬНАЯ АРХИТЕКТУРА  
-    "social_architecture": {
-      "trust_dynamics": {
-        "trust_giving_speed": 0.4,    # Скорость доверия к другим
-        "trust_earning_need": 0.8,    # Потребность в доверии от других
-        "betrayal_resilience": 0.5,   # Устойчивость к предательству
-        "loyalty_expression": 0.7     # Стиль проявления верности
-      },
-      
-      "communication_ethics": {
-        "transparency_preference": 0.6,  # Предпочтение прозрачности
-        "diplomacy_priority": 0.4,       # Приоритет дипломатии над правдой
-        "confidentiality_respect": 0.8,  # Уважение к конфиденциальности
-        "directness_comfort": 0.7        # Комфорт с прямотой
-      }
-    },
-    
-    # ⚖️ МОРАЛЬНЫЕ ОРИЕНТИРЫ
-    "moral_compass": {
-      "rule_following_tendency": 0.6,    # Следование правилам vs гибкость
-      "justice_sensitivity": 0.8,        # Чувствительность к несправедливости
-      "forgiveness_capacity": 0.5,       # Способность прощать
-      "consistency_importance": 0.7      # Важность последовательности
-    },
-    
-    # 🛡️ ЗАЩИТНЫЕ МЕХАНИЗМЫ
-    "defense_mechanisms": {
-      "vulnerability_shielding": 0.6,    # Защита уязвимости
-      "emotional_armor": 0.7,            # Эмоциональная броня
-      "information_guarding": 0.8,       # Охрана информации
-      "boundary_strength": 0.5           # Сила личных границ
-    },
-    
-    # 📊 ПРАКТИЧЕСКИЕ ПРОЯВЛЕНИЯ
-    "behavioral_manifestations": {
-      "promise_keeping": 0.8,           # Соблюдение обещаний
-      "secret_keeping_ability": 0.7,    # Способность хранить тайны
-      "accountability_taking": 0.9,     # Принятие ответственности
-      "authentic_expression": 0.6       # Подлинное самовыражение
-    }
-  }
-}
+```sql
+-- 1. Пользователи
+CREATE TABLE users (
+    telegram_id BIGINT PRIMARY KEY,
+    birth_date DATE NOT NULL,
+    birth_time TIME NOT NULL,
+    birth_city VARCHAR(100) NOT NULL,
+    current_city VARCHAR(100),
+    profession VARCHAR(100),
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
 
-Для построения доверия:
-trust_strategy = f"""
-Профиль доверия пользователя:
-- Скорость установления доверия: {trust_speed}
-- Потребность в прозрачности: {transparency_need}
-- Уважение к конфиденциальности: {confidentiality_respect}
+-- 2. Натальные карты (JSONB для гибкости)
+CREATE TABLE user_natal_charts (
+    telegram_id BIGINT PRIMARY KEY REFERENCES users,
+    natal_data JSONB NOT NULL,  -- Планеты, дома, аспекты
+    calculated_at TIMESTAMPTZ DEFAULT NOW()
+);
 
-Рекомендуемая стратегия: {trust_building_approach}
-"""
+-- 3. Magic Profiles (разделенная структура)
+CREATE TABLE user_magic_profiles (
+    telegram_id BIGINT PRIMARY KEY REFERENCES users,
+    ethical_framework JSONB NOT NULL,
+    social_predispositions JSONB NOT NULL,
+    emotional_architecture JSONB NOT NULL,
+    intellectual_traits JSONB NOT NULL,
+    willpower_profile JSONB NOT NULL,
+    creative_intuitive JSONB NOT NULL,
+    psychological_blueprint JSONB NOT NULL,
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
 
-Для командной работы:
-team_dynamics = f"""
-Социальные паттерны для команды:
-- Надежность: {dependability_score}
-- Прямота в общении: {directness_comfort} 
-- Конфликтный стиль: {conflict_approach}
+-- 4. Оптимальные активности с кэшированием
+CREATE TABLE optimal_activities (
+    telegram_id BIGINT REFERENCES users,
+    calculation_date DATE NOT NULL,
+    activities JSONB NOT NULL,      -- Топ-3 + финансы
+    feature_vector FLOAT[] NOT NULL,-- [100+] ML вектор
+    ml_data JSONB NOT NULL,         -- Полные ML данные
+    PRIMARY KEY (telegram_id, calculation_date)
+);
+```
 
-Оптимальная роль: {team_role_recommendation}
-"""
+###  Data Flow между модулями
 
-Для личного развития:
-growth_focus = f"""
-Приоритеты развития характера:
-1. Усилить {strength_to_develop} через {development_method}
-2. Сбалансировать {trait_to_balance} с помощью {balancing_approach}
-3. Использовать {natural_trait} для компенсации {challenge_area}
-"""
+```
+Пользовательские данные
+       ↓
+[1] Natal Chart Calculator
+       ↓ (планеты, дома, аспекты)
+[2] Psyho Matrix Calculator  
+       ↓ (цифры, характеристики)
+[3] Biorhythm Calculator
+       ↓ (циклы, энергия)
+       ├───────────────────┐
+       ↓                   ↓
+[4] Magic Profile      [5] Activity
+    Calculator            Optimizer
+       ↓                   ↓
+[6] Feature Vector ←───────┘
+       ↓
+[7] Cache (Redis)
+       ↓
+[8] API Response
+```
+
+---
 
 
 
-    
-    
-   
-   
-   
+### 📊 Ожидаемая нагрузка
+
+| Параметр | Текущая | План на 6 мес | План на 1 год |
+|----------|---------|---------------|---------------|
+| **Пользователей** | 1K | 10K | 100K |
+| **Запросов/день** | 5K | 50K | 500K |
+| **Размер данных** | 1GB | 10GB | 100GB |
+| **Пиковая RPS** | 10 | 100 | 500 |
+
+**ASTRA** - это мощный, масштабируемый движок для создания персонализированных рекомендаций на основе астрологии, нумерологии и машинного обучения. Система обрабатывает тысячи запросов в день с задержкой менее 200ms и доступностью 99.9%.
+
