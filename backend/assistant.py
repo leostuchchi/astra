@@ -4,6 +4,7 @@ from backend.matrix_services import calculate_and_save_psyho_matrix, get_user_ma
 from backend.prediction_services import generate_and_save_prediction, get_todays_prediction, \
     format_prediction_for_display
 from backend.biorhythm_services import calculate_and_save_biorhythms, get_user_biorhythms
+from backend.magic_profile import magic_profile_service
 from backend.database import async_session
 from datetime import datetime, date, timedelta
 from backend.moon import calculate_lunar_phase
@@ -54,6 +55,10 @@ class PersonalAssistant:
                     matrix_data = await calculate_and_save_psyho_matrix(telegram_id)
                     logger.info(f"✅ Психоматрица рассчитана")
 
+                    # 4. СОЗДАЕМ MAGIC PROFILE (новый пункт!)
+                    magic_profile = await magic_profile_service.calculate_and_save_magic_profile(telegram_id)
+                    logger.info(f"✅ Magic Profile создан")
+
                     # 4. Рассчитываем биоритмы на сегодня
                     biorhythms = await calculate_and_save_biorhythms(telegram_id)
                     logger.info(f"✅ Биоритмы рассчитаны")
@@ -67,6 +72,7 @@ class PersonalAssistant:
                             'user_profile': True,
                             'natal_chart': True,
                             'psyho_matrix': True,
+                            'magic_profile': True,
                             'biorhythms': True
                         }
                     }
@@ -334,6 +340,79 @@ class PersonalAssistant:
                 'issues': [f"Ошибка валидации: {str(e)}"],
                 'data_status': {},
                 'prediction_valid': False
+            }
+
+    async def calculate_magic_profile(self, telegram_id: int):
+        """Расчет и сохранение magic profile пользователя"""
+        try:
+            logger.info(f"🔄 Расчет magic profile для {telegram_id}")
+
+            from backend.magic_profile import magic_profile_service
+            magic_profile = await magic_profile_service.calculate_and_save_magic_profile(telegram_id)
+
+            logger.info(f"✅ Magic profile создан для {telegram_id}")
+            return {
+                'success': True,
+                'message': "Magic profile успешно создан",
+                'profile_created': True
+            }
+
+        except Exception as e:
+            logger.error(f"❌ Ошибка создания magic profile для {telegram_id}: {e}")
+            return {
+                'success': False,
+                'message': f"Ошибка создания magic profile: {str(e)}"
+            }
+
+    async def get_optimal_activities(self, telegram_id: int, target_date: date = None):
+        """Получение оптимальных активностей для пользователя"""
+        try:
+            if target_date is None:
+                target_date = date.today()
+
+            logger.info(f"🔄 Получение оптимальных активностей для {telegram_id}")
+
+            from backend.activity_optimizer import activity_optimizer_service
+            activities_data = await activity_optimizer_service.get_ml_activities(telegram_id, target_date)
+
+            # Извлекаем только необходимые данные для внутреннего использования
+            optimal_activities = activities_data.get('optimal_activities', [])
+            activity_scores = activities_data.get('activity_scores', {})
+
+            logger.info(f"✅ Оптимальные активности получены для {telegram_id}")
+            return {
+                'success': True,
+                'optimal_activities': optimal_activities,
+                'activity_scores': activity_scores,
+                'calculation_date': target_date.isoformat()
+            }
+
+        except Exception as e:
+            logger.error(f"❌ Ошибка получения оптимальных активностей для {telegram_id}: {e}")
+            return {
+                'success': False,
+                'message': f"Ошибка получения активностей: {str(e)}"
+            }
+
+    async def validate_user_calculations(self, telegram_id: int):
+        """Валидация всех расчетов пользователя"""
+        try:
+            logger.info(f"🔄 Валидация расчетов для {telegram_id}")
+
+            from backend.calculation_validator import calculation_validator_service
+            validation_result = await calculation_validator_service.detailed_validation_report(telegram_id)
+
+            logger.info(f"✅ Валидация завершена для {telegram_id}")
+            return {
+                'success': True,
+                'validation_result': validation_result
+            }
+
+        except Exception as e:
+            logger.error(f"❌ Ошибка валидации расчетов для {telegram_id}: {e}")
+            return {
+                'success': False,
+                'message': f"Ошибка валидации: {str(e)}"
             }
 
 

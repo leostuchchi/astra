@@ -1,17 +1,19 @@
 version: '3.8'
 
 services:
+  # Основная база данных для проекта Astra
   postgres:
     image: postgres:16
-    container_name: postgres_astrology
+    container_name: postgres_astra
     environment:
       POSTGRES_DB: p_assistant_bd
       POSTGRES_USER: pers_assist
-      POSTGRES_PASSWORD: astra123  # Простой пароль без специальных символов
+      POSTGRES_PASSWORD: astra123
     ports:
-      - "5432:5432"
+      - "5435:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./init-scripts/01-init-tables.sql:/docker-entrypoint-initdb.d/01-init-tables.sql
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U pers_assist -d p_assistant_bd"]
@@ -19,5 +21,60 @@ services:
       timeout: 10s
       retries: 3
 
+  # Бот для Telegram - основной интерфейс пользователя
+  astra_bot:
+    build: .
+    container_name: astra_bot
+    environment:
+      DATABASE_URL: "postgresql+asyncpg://pers_assist:astra123@postgres:5432/p_assistant_bd"
+      TELEGRAM_BOT_TOKEN: "${TELEGRAM_BOT_TOKEN}"
+      LOG_LEVEL: "INFO"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    command: python bot/main.py
+    volumes:
+      - .:/app
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # API для доступа к данным Astra - для интеграции с другими проектами
+  astra_api:
+    build: .
+    container_name: astra_api
+    environment:
+      DATABASE_URL: "postgresql+asyncpg://pers_assist:astra123@postgres:5432/p_assistant_bd"
+      TELEGRAM_BOT_TOKEN: "${TELEGRAM_BOT_TOKEN}"
+      ASSISTANT_API_HOST: "0.0.0.0"
+      ASSISTANT_API_PORT: "8000"
+      LOG_LEVEL: "INFO"
+    ports:
+      - "8000:8000"  # API порт для внешних проектов (assistant и другие)
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    command: python -m backend.assistant_api
+    volumes:
+      - .:/app
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
 volumes:
   postgres_data:
+
+networks:
+  default:
+    name: astra_network

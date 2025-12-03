@@ -1,5 +1,6 @@
 import os
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import sessionmaker, declarative_base
 from sqlalchemy import Column, BigInteger, JSON, TIMESTAMP, String, Date, Time, Text
 from sqlalchemy.sql import func
@@ -95,6 +96,39 @@ class Biorhythms(Base):
     def __repr__(self):
         return f"<Biorhythms(telegram_id={self.telegram_id}, date={self.calculation_date})>"
 
+
+# Добавить в существующий database.py:
+
+class UserMagicProfile(Base):
+    __tablename__ = 'user_magic_profiles'
+
+    telegram_id = Column(BigInteger, ForeignKey('users.telegram_id', ondelete='CASCADE'), primary_key=True, index=True)
+    ethical_framework = Column(JSONB, nullable=False)
+    social_predispositions = Column(JSONB, nullable=False)
+    emotional_architecture = Column(JSONB, nullable=False)
+    intellectual_traits = Column(JSONB, nullable=False)
+    willpower_profile = Column(JSONB, nullable=False)
+    creative_intuitive = Column(JSONB, nullable=False)
+    psychological_blueprint = Column(JSONB, nullable=False)
+    created_at = Column(TIMESTAMP, server_default=func.now())
+    updated_at = Column(TIMESTAMP, server_default=func.now(), onupdate=func.now())
+
+    def __repr__(self):
+        return f"<UserMagicProfile(telegram_id={self.telegram_id})>"
+
+class OptimalActivities(Base):
+    __tablename__ = 'optimal_activities'
+
+    telegram_id = Column(BigInteger, ForeignKey('users.telegram_id', ondelete='CASCADE'), primary_key=True, index=True)
+    calculation_date = Column(Date, primary_key=True, index=True)
+    activities = Column(JSONB, nullable=False)  # Список оптимальных активностей
+    energy_scores = Column(JSONB, nullable=False)  # Оценки активностей
+    ml_data = Column(JSONB, nullable=False, default={})  # ML-данные для кэширования
+    created_at = Column(TIMESTAMP, server_default=func.now())
+    updated_at = Column(TIMESTAMP, server_default=func.now(), onupdate=func.now())
+
+    def __repr__(self):
+        return f"<OptimalActivities(telegram_id={self.telegram_id}, date={self.calculation_date})>"
 
 
 async def get_db():

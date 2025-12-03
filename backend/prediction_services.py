@@ -202,6 +202,7 @@ async def generate_and_save_prediction(telegram_id: int, target_date: date):
         daily_schedule = combiner.create_daily_schedule(biorhythm_data)
         critical_notes = combiner._extract_critical_notes(astro_prediction, biorhythm_data)
 
+
         # Создаем финальное предсказание на основе РАСЧЕТОВ
         final_prediction = {
             'prediction_date': target_date.isoformat(),
